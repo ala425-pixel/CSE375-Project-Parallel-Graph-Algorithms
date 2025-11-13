@@ -1,0 +1,26 @@
+Project Outline:
+
+Test BFS
+	Top down version
+	Bottom up version
+	Hybrid as described in reference [1]
+	All implementations found in BFS folder
+
+Test SSPD
+	Dijkstra's Algorithm
+		
+	Bellman-Ford
+	Stepping Algorithm Framework
+		Delta*-stepping, rho-stepping, and bellman-ford all found in ssss.h file
+
+Additional Implementation Details:
+	Dijkstra implementation uses std::priority_queue
+	The other sssp algorithms use the data structure found in hashbag.h
+	I'm not sure what this is
+
+	Graphs are stored as .adj or .bin files
+	The basic_analytics.cpp file tells you graph statistics if you give it a graph file input
+	
+Find benchmark graphs
+
+
