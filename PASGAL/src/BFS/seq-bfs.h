@@ -1,4 +1,5 @@
 #include <queue>
+#include <algorithm>
 
 #include "graph.h"
 #include "parlay/sequence.h"

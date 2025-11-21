@@ -1,6 +1,7 @@
 #include "bfs.h"
 
 #include <queue>
+#include <algorithm>
 
 #include "graph.h"
 #include "seq-bfs.h"

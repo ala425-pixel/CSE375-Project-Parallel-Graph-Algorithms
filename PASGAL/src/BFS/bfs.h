@@ -16,11 +16,13 @@ class BFS {
   using EdgeId = typename Graph::EdgeId;
 
   static constexpr NodeId DIST_MAX = numeric_limits<NodeId>::max();
-  static constexpr size_t LOCAL_QUEUE_SIZE = 128;
+  static constexpr size_t LOCAL_QUEUE_SIZE = 128; // Used for Vetrical Control Granularity (VCG) optimization
+						  // Tells us how many nodes a thread should explore before adding to global frontier
+						  // Only in spare relax
   static constexpr size_t BLOCK_SIZE = 1024;
-  static constexpr size_t NUM_SAMPLES = 1024;
-  static constexpr size_t SPARSE_TH = 20;
-  static constexpr size_t GROWTH_FACTOR = 10;
+  static constexpr size_t NUM_SAMPLES = 1024; // Used to estimate number of nodes in a frontier
+  static constexpr size_t SPARSE_TH = 20; // Threshold for determining sparse relax or dense relax. Depends on the frontier size.
+  static constexpr size_t GROWTH_FACTOR = 10; // Threshold for determining if VGC should be used
 
   const Graph &G;
   const int LOG2N;
@@ -62,6 +64,7 @@ class BFS {
     }
   }
 
+// estimate the number of nodes in the frontier. More accurate as NUM_SAMPLES gets larger
   size_t estimate_size([[maybe_unused]] size_t id) {
     static uint32_t seed = 951;
     size_t hits = 0;
@@ -75,7 +78,7 @@ class BFS {
     return hits * G.n / NUM_SAMPLES;
   }
 
-  void visit_neighbors_parallel(NodeId u) {
+  void visit_neighbors_parallel(NodeId u) { 
     parallel_for(
         G.offsets[u], G.offsets[u + 1],
         [&](size_t i) {
@@ -85,7 +88,7 @@ class BFS {
           }
         },
         BLOCK_SIZE);
-  }
+    }
 
   void visit_neighbors_sequential(NodeId u, NodeId *local_queue, size_t &rear) {
     for (EdgeId i = G.offsets[u]; i < G.offsets[u + 1]; i++) {
@@ -118,6 +121,7 @@ class BFS {
       in_frontier[f] = false;
       if (id == 0 || id == log2_up(dist[f])) {
         if (use_local_queue) {
+	  // verttical granularity control optimization
           NodeId local_queue[LOCAL_QUEUE_SIZE];
           size_t front = 0, rear = 0;
           local_queue[rear++] = f;
@@ -162,6 +166,7 @@ class BFS {
   }
 
   sequence<NodeId> bfs(NodeId s) {
+    std::thread::hardware_concurrency();
     parallel_for(0, G.n, [&](size_t i) {
       in_frontier[i] = false;
       dist[i] = DIST_MAX;
@@ -175,11 +180,13 @@ class BFS {
     round = 0;
     size_t prev_size = 0;
     bool dense = false;
+    int count = 0;
     for (int i = 0; i <= LOG2N; i++) {
       if (i != 0) {
         round = max(round, (size_t)((1 << (i - 1)) + 1));
       }
       while (true) {
+	count++;
         size_t approx_size = estimate_size(i);
         // internal::timer t;
         // printf("prev_size: %zu, approx_size: %zu\n", prev_size, approx_size);
@@ -218,6 +225,7 @@ class BFS {
     for (size_t i = 0; i < num_bags; i++) {
       assert(bags[i].pack_into(make_slice(frontier)) == 0);
     }
+    printf("diameter = %d\n", count);
     return dist;
   }
 };
