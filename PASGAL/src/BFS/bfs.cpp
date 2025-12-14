@@ -6,7 +6,7 @@
 #include "graph.h"
 #include "seq-bfs.h"
 
-constexpr int NUM_SRC = 5;
+constexpr int NUM_SRC = 10;
 constexpr int NUM_ROUND = 5;
 
 template <class Algo, class Graph, class NodeId = typename Graph::NodeId>

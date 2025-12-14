@@ -1,5 +1,6 @@
 #pragma once
 #include <climits>
+#include <cstdlib>
 
 #include "graph.h"
 #include "hashbag.h"
@@ -10,6 +11,21 @@
 using namespace std;
 using namespace parlay;
 
+size_t get_env_or_default(const char* env_name, size_t default_val) {
+    const char* env_val = std::getenv(env_name);
+    if (env_val != nullptr) {
+        try {
+            cout << "changing " << env_name << endl;
+            return std::stoul(env_val);
+        } catch (...) {
+            // Invalid value, fallback to default
+            cout << "Nvm" << endl;
+            return default_val;
+        }
+    }
+    return default_val;
+}
+
 template <class Graph>
 class BFS {
   using NodeId = typename Graph::NodeId;
@@ -19,10 +35,16 @@ class BFS {
   static constexpr size_t LOCAL_QUEUE_SIZE = 128; // Used for Vetrical Control Granularity (VCG) optimization
 						  // Tells us how many nodes a thread should explore before adding to global frontier
 						  // Only in spare relax
+  // static const size_t LOCAL_QUEUE_SIZE = get_env_or_default("LOCAL_QUEUE_SIZE", 128);
   static constexpr size_t BLOCK_SIZE = 1024;
   static constexpr size_t NUM_SAMPLES = 1024; // Used to estimate number of nodes in a frontier
   static constexpr size_t SPARSE_TH = 20; // Threshold for determining sparse relax or dense relax. Depends on the frontier size.
+  // static const size_t SPARSE_TH = get_env_or_default("SPARSE_TH", 20); // Threshold for determining sparse relax or dense relax. Depends on the frontier size.
   static constexpr size_t GROWTH_FACTOR = 10; // Threshold for determining if VGC should be used
+  // static const size_t GROWTH_FACTOR = get_env_or_default("GROWTH_FACTOR", 10); // Threshold for determining if VGC should be used
+  // size_t LOCAL_QUEUE_SIZE = 128;
+  // size_t SPARSE_TH = 20;
+  // size_t GROWTH_FACTOR = 10;
 
   const Graph &G;
   const int LOG2N;
@@ -45,6 +67,12 @@ class BFS {
     dist = sequence<NodeId>::uninitialized(G.n);
     bag_id = sequence<int>::uninitialized(G.n);
     in_frontier = sequence<atomic<bool>>(G.n);
+    // printf("num_bags %ld\n", num_bags);
+    // printf("queue %ld\n", LOCAL_QUEUE_SIZE);
+    // LOCAL_QUEUE_SIZE = get_env_or_default("LOCAL_QUEUE_SIZE", 128);
+    // printf("queue %ld\n", LOCAL_QUEUE_SIZE);
+    // SPARSE_TH = get_env_or_default("SPARSE_TH", 20);
+    // GROWTH_FACTOR = get_env_or_default("GROWTH_FACTOR", 10);
   }
 
   void add_to_frontier(NodeId v) {
@@ -178,30 +206,32 @@ class BFS {
     add_to_frontier(s);
 
     round = 0;
-    size_t prev_size = 0;
+    // size_t prev_size = 0;
     bool dense = false;
-    int count = 0;
+    // int count = 0;
     for (int i = 0; i <= LOG2N; i++) {
       if (i != 0) {
         round = max(round, (size_t)((1 << (i - 1)) + 1));
       }
       while (true) {
-	count++;
-        size_t approx_size = estimate_size(i);
+	// count++;
+        // size_t approx_size = estimate_size(i);
         // internal::timer t;
         // printf("prev_size: %zu, approx_size: %zu\n", prev_size, approx_size);
-        if (if_sparse(approx_size)) {
+        // if (if_sparse(approx_size)) {
+        if (true) {
           if (dense) {
             dense2sparse();
           }
           size_t frontier_size =
               bags[i % num_bags].pack_into(make_slice(frontier));
-          if (frontier_size <= prev_size * GROWTH_FACTOR) {
+          // if (frontier_size <= prev_size * GROWTH_FACTOR) {
+          if (false) {
             use_local_queue = true;
           } else {
             use_local_queue = false;
           }
-          prev_size = frontier_size;
+          // prev_size = frontier_size;
           if (!frontier_size) {
             break;
           }
@@ -217,7 +247,7 @@ class BFS {
           dense = true;
           round++;
           // t.next("dense");
-          prev_size = approx_size;
+          // prev_size = approx_size;
         }
       }
     }
@@ -225,7 +255,7 @@ class BFS {
     for (size_t i = 0; i < num_bags; i++) {
       assert(bags[i].pack_into(make_slice(frontier)) == 0);
     }
-    printf("diameter = %d\n", count);
+    // printf("diameter = %d\n", count);
     return dist;
   }
 };
