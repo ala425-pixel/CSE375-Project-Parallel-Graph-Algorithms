@@ -1,4 +1,7 @@
-#include "bfs.h"
+#include "bfs_hvgc.h"
+#include "bfs_svgc.h"
+#include "bfs_h.h"
+#include "bfs_s.h"
 
 #include <queue>
 
@@ -36,19 +39,37 @@ void run(const Graph &G, const sequence<NodeId> &largest_cc) {
   size_t m = largest_cc.size();
   for (int v = 0; v < NUM_SRC; v++) {
     NodeId s = largest_cc[hash32(v) % m];
-    sequence<NodeId> dist1, dist2;
+    sequence<NodeId> dist1, dist2, dist3, dist4, dist5;
 
     {
-      BFS solver(G);
+      Seq_BFS solver(G);
       run([&]() { dist1 = solver.bfs(s); });
     }
 
     {
-      Seq_BFS solver(G);
+      BFS_HVGC solver(G);
       run([&]() { dist2 = solver.bfs(s); });
     }
 
+    {
+      BFS_SVGC solver(G);
+      run([&]() { dist3 = solver.bfs(s); });
+    }
+
+    {
+      BFS_H solver(G);
+      run([&]() { dist4 = solver.bfs(s); });
+    }
+
+    {
+      BFS_S solver(G);
+      run([&]() { dist5 = solver.bfs(s); });
+    }
+
     assert(dist1 == dist2);
+    assert(dist1 == dist3);
+    assert(dist1 == dist4);
+    assert(dist1 == dist5);
     ofstream ofs("bfs.tsv", ios_base::app);
     ofs << s << '\n';
     printf("\n");

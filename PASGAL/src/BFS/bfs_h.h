@@ -11,23 +11,8 @@
 using namespace std;
 using namespace parlay;
 
-size_t get_env_or_default(const char* env_name, size_t default_val) {
-    const char* env_val = std::getenv(env_name);
-    if (env_val != nullptr) {
-        try {
-            cout << "changing " << env_name << endl;
-            return std::stoul(env_val);
-        } catch (...) {
-            // Invalid value, fallback to default
-            cout << "Nvm" << endl;
-            return default_val;
-        }
-    }
-    return default_val;
-}
-
 template <class Graph>
-class BFS {
+class BFS_H{
   using NodeId = typename Graph::NodeId;
   using EdgeId = typename Graph::EdgeId;
 
@@ -35,16 +20,10 @@ class BFS {
   static constexpr size_t LOCAL_QUEUE_SIZE = 128; // Used for Vetrical Control Granularity (VCG) optimization
 						  // Tells us how many nodes a thread should explore before adding to global frontier
 						  // Only in spare relax
-  // static const size_t LOCAL_QUEUE_SIZE = get_env_or_default("LOCAL_QUEUE_SIZE", 128);
   static constexpr size_t BLOCK_SIZE = 1024;
   static constexpr size_t NUM_SAMPLES = 1024; // Used to estimate number of nodes in a frontier
   static constexpr size_t SPARSE_TH = 20; // Threshold for determining sparse relax or dense relax. Depends on the frontier size.
-  // static const size_t SPARSE_TH = get_env_or_default("SPARSE_TH", 20); // Threshold for determining sparse relax or dense relax. Depends on the frontier size.
   static constexpr size_t GROWTH_FACTOR = 10; // Threshold for determining if VGC should be used
-  // static const size_t GROWTH_FACTOR = get_env_or_default("GROWTH_FACTOR", 10); // Threshold for determining if VGC should be used
-  // size_t LOCAL_QUEUE_SIZE = 128;
-  // size_t SPARSE_TH = 20;
-  // size_t GROWTH_FACTOR = 10;
 
   const Graph &G;
   const int LOG2N;
@@ -56,23 +35,16 @@ class BFS {
   sequence<int> bag_id;
   sequence<atomic<bool>> in_frontier;
   bool sparse;
-  bool use_local_queue;
 
  public:
-  BFS() = delete;
-  BFS(const Graph &_G)
+  BFS_H() = delete;
+  BFS_H(const Graph &_G)
       : G(_G), LOG2N(log2_up(G.n)), num_bags(log2_up(LOCAL_QUEUE_SIZE) + 2) {
     bags = sequence<hashbag<NodeId>>(num_bags, hashbag<NodeId>(G.n));
     frontier = sequence<NodeId>::uninitialized(G.n);
     dist = sequence<NodeId>::uninitialized(G.n);
     bag_id = sequence<int>::uninitialized(G.n);
     in_frontier = sequence<atomic<bool>>(G.n);
-    // printf("num_bags %ld\n", num_bags);
-    // printf("queue %ld\n", LOCAL_QUEUE_SIZE);
-    // LOCAL_QUEUE_SIZE = get_env_or_default("LOCAL_QUEUE_SIZE", 128);
-    // printf("queue %ld\n", LOCAL_QUEUE_SIZE);
-    // SPARSE_TH = get_env_or_default("SPARSE_TH", 20);
-    // GROWTH_FACTOR = get_env_or_default("GROWTH_FACTOR", 10);
   }
 
   void add_to_frontier(NodeId v) {
@@ -148,23 +120,7 @@ class BFS {
       NodeId f = frontier[i];
       in_frontier[f] = false;
       if (id == 0 || id == log2_up(dist[f])) {
-        if (use_local_queue) {
-	  // verttical granularity control optimization
-          NodeId local_queue[LOCAL_QUEUE_SIZE];
-          size_t front = 0, rear = 0;
-          local_queue[rear++] = f;
-          while (front < rear) {
-            NodeId u = local_queue[front++];
-            size_t deg = G.offsets[u + 1] - G.offsets[u];
-            if (deg < BLOCK_SIZE) {
-              visit_neighbors_sequential(u, local_queue, rear);
-            } else {
-              visit_neighbors_parallel(u);
-            }
-          }
-        } else {
-          visit_neighbors_parallel(f);
-        }
+        visit_neighbors_parallel(f);
       }
     });
   }
@@ -215,22 +171,17 @@ class BFS {
       }
       while (true) {
 	// count++;
-        // size_t approx_size = estimate_size(i);
+        size_t approx_size = estimate_size(i);
         // internal::timer t;
         // printf("prev_size: %zu, approx_size: %zu\n", prev_size, approx_size);
-        // if (if_sparse(approx_size)) {
-        if (true) {
+        if (if_sparse(approx_size)) {
+        // if (true) {
           if (dense) {
             dense2sparse();
           }
           size_t frontier_size =
               bags[i % num_bags].pack_into(make_slice(frontier));
-          // if (frontier_size <= prev_size * GROWTH_FACTOR) {
-          if (false) {
-            use_local_queue = true;
-          } else {
-            use_local_queue = false;
-          }
+          
           // prev_size = frontier_size;
           if (!frontier_size) {
             break;

@@ -1,4 +1,4 @@
-#include "bfs.h"
+#include "bfs_hvgc.h"
 
 #include <queue>
 #include <algorithm>
@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
   fprintf(stdout, "Running on %s: |V|=%zu, |E|=%zu, num_src=%d, num_round=%d\n",
           input_path, G.n, G.m, NUM_SRC, NUM_ROUND);
 
-  BFS solver(G);
+  BFS_HVGC solver(G);
   if (source == UINT_MAX) {
     run(solver, G, verify);
   } else {

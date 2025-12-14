@@ -92,6 +92,7 @@ int main(int argc, char* argv[]) {
         break;
       case 'f':
         f = atof(optarg);
+        break;
       case 'o':
         output_path = optarg;
         break;
@@ -101,6 +102,6 @@ int main(int argc, char* argv[]) {
     }
   }
   auto G = generate_grid(row, col, f);
-  G.write_binary_format(output_path);
+  G.write_pbbs_format(output_path);
   return 0;
 }
