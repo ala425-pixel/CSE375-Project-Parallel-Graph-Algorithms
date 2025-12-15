@@ -12,12 +12,18 @@
 #include <fstream>
 #include <type_traits>
 #include <vector>
+#include <string>
+#include <random>
+#include <numeric>
 
-#include "parlay/io.h"
-#include "parlay/parallel.h"
-#include "parlay/sequence.h"
-#include "parlay/utilities.h"
+#include "../external/parlaylib/include/parlay/io.h"
+#include "../external/parlaylib/include/parlay/parallel.h"
+#include "../external/parlaylib/include/parlay/sequence.h"
+#include "../external/parlaylib/include/parlay/utilities.h"
 #include "utils.h"
+
+std::default_random_engine generator;
+std::exponential_distribution<double> distribution(1.0);
 
 class Empty {};
 
@@ -306,7 +312,7 @@ class Graph {
   }
 
   // Generates integral edge weights in range [l, r)
-  void generate_random_weight(uint32_t l, uint32_t r) {
+  void generate_random_weight(std::string type, uint32_t l, uint32_t r) {
     if constexpr (std::is_same_v<EdgeTy, Empty>) {
       std::cerr << "Error: Graph instance does not have a edge weight field"
                 << std::endl;
@@ -321,7 +327,14 @@ class Graph {
     parlay::parallel_for(0, n, [&](NodeId u) {
       parlay::parallel_for(offsets[u], offsets[u + 1], [&](EdgeId i) {
         NodeId v = edges[i].v;
-        edges[i].w = ((parlay::hash32(u) ^ parlay::hash32(v)) % range) + l;
+        if (type == "uniform") {
+	  edges[i].w = ((parlay::hash32(u) ^ parlay::hash32(v)) % range) + l;
+	}
+	else if (type == "pareto") {
+	  uint32_t val = static_cast<uint32_t>(std::exp(distribution(generator)));
+	  while (val > r || val <= l) { val = static_cast<uint32_t>(std::exp(distribution(generator))); }
+	  edges[i].w = val;
+	}
       });
     });
   }
