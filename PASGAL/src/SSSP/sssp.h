@@ -7,6 +7,7 @@
 #include "parlay/sequence.h"
 #include "parlay/utilities.h"
 #include "utils.h"
+#include <atomic>
 
 using namespace std;
 using namespace parlay;
@@ -21,11 +22,15 @@ class SSSP {
   using EdgeTy = typename Graph::EdgeTy;
 
   static constexpr EdgeTy DIST_MAX = numeric_limits<EdgeTy>::max();
-  static constexpr size_t LOCAL_QUEUE_SIZE = 128;
+  static constexpr size_t LOCAL_QUEUE_SIZE = 0;
   static constexpr size_t BLOCK_SIZE = 1024;
   static constexpr size_t NUM_SAMPLES = 1024;
-  static constexpr size_t SPARSE_TH = 100;
+  size_t SPARSE_TH = 20;
   static constexpr size_t GROWTH_FACTOR = 10;
+
+  // variables for recording number of edge and vertex visits
+  std::atomic<unsigned long> node_visits{0};
+  std::atomic<unsigned long> edge_visits{0};
 
   const Graph &G;
   bool sparse;
@@ -81,7 +86,9 @@ class SSSP {
     for (EdgeId i = G.offsets[u]; i < G.offsets[u + 1]; i++) {
       NodeId v = G.edges[i].v;
       EdgeTy w = G.edges[i].w;
+      edge_visits.fetch_add(1);
       if (write_min(&dist[v], dist[u] + w)) {
+	      node_visits.fetch_add(1);
         if (rear < LOCAL_QUEUE_SIZE) {
           local_queue[rear++] = v;
         } else {
@@ -95,6 +102,7 @@ class SSSP {
     blocked_for(G.offsets[u], G.offsets[u + 1], BLOCK_SIZE,
                 [&](size_t, size_t start, size_t end) {
                   if (G.symmetrized) {
+		  printf("symmetric\n");
                     EdgeTy min_dist = dist[u];
                     for (EdgeId i = start; i < end; i++) {
                       NodeId v = G.edges[i].v;
@@ -110,7 +118,9 @@ class SSSP {
                   for (EdgeId i = start; i < end; i++) {
                     NodeId v = G.edges[i].v;
                     EdgeTy w = G.edges[i].w;
+		    edge_visits.fetch_add(1);
                     if (write_min(&dist[v], dist[u] + w)) {
+			    node_visits.fetch_add(1);			    
                       add_to_frontier(v);
                     }
                   }
@@ -193,7 +203,8 @@ class SSSP {
     in_next_frontier = sequence<atomic<bool>>::uninitialized(G.n);
   }
 
-  sequence<EdgeTy> sssp(NodeId s) {
+  pair<sequence<EdgeTy>, double> sssp(NodeId s, uint32_t threshold) {
+    SPARSE_TH = threshold;
     if (!G.weighted) {
       fprintf(stderr, "Error: Input graph is unweighted\n");
       exit(EXIT_FAILURE);
@@ -212,11 +223,14 @@ class SSSP {
     in_frontier[s] = true;
     sparse = true;
 
-    // int round = 0;
+    int round = 0;
+    node_visits.store(0);
+    edge_visits.store(0);
     while (frontier_size) {
-      // printf("Round %d: %s, size: %zu, ", round++, sparse ? "sparse" :
+      round++;
+      //printf("Round %d: %s, size: %zu, ", round, sparse ? "sparse" :
       // "dense", frontier_size);
-      // internal::timer t;
+      internal::timer t;
       if (sparse) {
         frontier_size = sparse_relax();
       } else {
@@ -232,7 +246,14 @@ class SSSP {
       // printf("pack: %f\n", t.next_time());
       sparse = next_sparse;
     }
-    return dist;
+    printf("diameter = %d   avg. relaxations per vertex = %f ||| avg. edge relaxations = %f\n", round, 
+		    static_cast<double>(node_visits.load()) / static_cast<double>(G.n), static_cast<double>(edge_visits.load()) / static_cast<double>(G.m));
+    uint32_t maxDist = 0;
+    for (uint32_t i = 0; i < G.n; i++) {
+	maxDist = max(maxDist, dist[i]);
+    }
+    //printf("longest distance = %u\n", maxDist);
+    return make_pair(dist, static_cast<double>(edge_visits.load()) / static_cast<double>(G.m));
   }
 };
 
